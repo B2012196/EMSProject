@@ -1,0 +1,159 @@
+﻿@page "/equipmenttransfer"
+@inject EquipmentService EquipmentService
+@inject LocationService LocationService
+@inject EquipmentTransferService EquipmentTransferService
+@inject NavigationManager Navigation
+<PageTitle>EquipmentTransfers</PageTitle>
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="id">Id</option>
+        <option value="seri">Equipment Seri</option>
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchEquipmentTransfer()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+</div>
+
+   <RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                 Data="equipmentTransfers" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedEquipmentTransfers>
+    <Columns>
+        <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="40px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="startDate" Title="Start Date" Frozen="true" Width="100px" />
+        <RadzenDataGridColumn Property="endDate" Title="End Date" Frozen="true" Width="100px" />
+        
+        <RadzenDataGridColumn Property="equipmentId" Title="Equipment name" Frozen="true" Width="160px">
+            <Template Context="e">
+                @getEquipmentName(e.equipmentId)
+            </Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Property="sentLocationId" Title="Sent Location" Frozen="true" Width="160px">
+            <Template Context="e">
+                @getLocationName(e.sentLocationId)
+            </Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Property="receivedLocationId" Title="Received Location" Frozen="true" Width="160px">
+            <Template Context="e">
+                @getLocationName(e.receivedLocationId)
+            </Template>
+        </RadzenDataGridColumn>
+
+        <RadzenDataGridColumn Width="100px" Title="">
+            <Template Context="data">
+                @if (data.endDate == null)
+                {
+                    <RadzenButton Text="Completed" Click=@(() => CompleteTransfer(data.id)) ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter" Icon="info" class="m-1" />
+                }
+            </Template>
+        </RadzenDataGridColumn>
+        @* <RadzenDataGridColumn Property="Note" Title="Note" Frozen="true" Width="100px" /> *@
+
+    </Columns>
+</RadzenDataGrid>
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@code {
+    IEnumerable<EquipmentTransferModel> equipmentTransfers;
+    IList<EquipmentTransferModel> selectedEquipmentTransfers;
+    IEnumerable<Equipment> equipments;
+    IEnumerable<Locations> locations;
+    private string errorMessage;
+    private string searchType = "name";
+    private string searchValue = string.Empty;
+    protected override async Task OnInitializedAsync()
+    {
+        equipmentTransfers = await EquipmentTransferService.GetAllEquipmentTransfers();
+        selectedEquipmentTransfers = new List<EquipmentTransferModel>() { equipmentTransfers.FirstOrDefault() };
+
+        var result = await EquipmentService.GetAllEquipments();
+        equipments = result.Item1;
+        locations = await LocationService.GetAllLocations();
+    }
+
+    private string getLocationName(int locationId)
+    {
+        var location = locations.SingleOrDefault(l => l.id == locationId);
+        return location != null ? location.DisplayName : "Unknown";
+    }
+
+    private string getEquipmentName(int equipmentId)
+    {
+        var equipment = equipments.SingleOrDefault(e => e.id == equipmentId);
+        return equipment != null ? equipment.name : "Unknown";
+    }
+
+    private async Task CompleteTransfer(int id)
+    {
+        try
+        {
+            var response = await EquipmentTransferService.CompleteTransfer(id);
+            if (response.Item1 != false)
+            {
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch
+        {
+
+        }
+    }
+
+    private async Task SearchEquipmentTransfer()
+    {
+        try
+        {
+            var response = ("", "");
+            List<EquipmentTransferModel> eqtrList = new List<EquipmentTransferModel>();
+            if(searchType == "id")
+            {
+                if (int.TryParse(searchValue, out int id))
+                {
+                    response = await EquipmentTransferService.GetById(id);
+                    if(response.Item1 != null)
+                    {
+                        var eTr = JsonSerializer.Deserialize<EquipmentTransferModel>(response.Item1);
+                        if (eTr != null)
+                            eqtrList.Add(eTr);
+                    }
+                    else errorMessage = response.Item2;
+                }
+                else
+                {
+                    errorMessage = "Nhập dữ liệu không hợp lệ";
+                    return;
+                }
+            }
+            else
+            {
+                response = await EquipmentTransferService.GetByFieldId(searchType, searchValue);
+                if (response.Item1 != null)
+                {
+                    var eTr = JsonSerializer.Deserialize<EquipmentTransferModel>(response.Item1);
+                    if (eTr != null)
+                        eqtrList.Add(eTr);
+                }
+                else
+                {
+                    errorMessage = response.Item2;
+                    return;
+                }
+            }
+
+            equipmentTransfers = eqtrList;
+            selectedEquipmentTransfers = new List<EquipmentTransferModel>() { equipmentTransfers.FirstOrDefault() };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = ex.ToString();
+        }
+    }
+}

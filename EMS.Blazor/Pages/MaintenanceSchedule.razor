@@ -1,0 +1,174 @@
+﻿@page "/maintenanceschedules"
+@inject EquipmentService EquipmentService
+@inject MaintenanceScheduleService MaintenanceScheduleService
+
+<PageTitle>MaintenanceSchedules</PageTitle>
+
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="id">Id</option>
+        <option value="seri">Equipment seri</option>
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchMaintenanceSchedules()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+    <br />
+</div>
+<br />
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+<RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                Data="@maintenanceSchedules" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedMaintenanceSchedules>
+    <Columns>
+        <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="50px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="equipmentId" Title="Equipment name" Frozen="true" Width="160px">
+            <Template Context="e">
+                @getEquipmentName(e.equipmentId)
+            </Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Property="scheduleDate" Title="Scheduled Date" Frozen="true" Width="100px" />
+        <RadzenDataGridColumn Property="description" Title="Description" Frozen="true" Width="200px" />
+        <RadzenDataGridColumn Width="100px" Title="">
+            <Template Context="data">
+                @if (!data.isRepaired)
+                {
+                    <RadzenButton Text="Complete" Click=@(() => CompleteRepair(data.id)) ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter" Icon="info" class="rz-py-0" />
+                }
+                </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+
+@code {
+    IEnumerable<MaintenanceScheduleModel> maintenanceSchedules;
+    IList<MaintenanceScheduleModel> selectedMaintenanceSchedules;
+    IEnumerable<Equipment> equipments;
+    private string errorMessage;
+    private string searchType = "name";
+    private string searchValue = string.Empty;
+    private bool showAddNewForm = false;
+    private bool checkRepair = false;
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await MaintenanceScheduleService.GetAllMaintenanceSchedules();
+        if (response.Item1 != null)
+        {
+            maintenanceSchedules = JsonSerializer.Deserialize<List<MaintenanceScheduleModel>>(response.Item1);
+            selectedMaintenanceSchedules = new List<MaintenanceScheduleModel>() { maintenanceSchedules.FirstOrDefault() };
+            var result = await EquipmentService.GetAllEquipments();
+            equipments = result.Item1;
+        }
+        else errorMessage = response.Item2;
+
+    }
+
+    private string getEquipmentName(int equipmentId)
+    {
+        var equipment = equipments.SingleOrDefault(e => e.id == equipmentId);
+        return equipment != null ? equipment.name : "Unknown";
+    }
+
+    private async Task SearchMaintenanceSchedules()
+    {
+        try
+        {
+            var response = ("", "");
+            List<MaintenanceScheduleModel> maintenanceList = new List<MaintenanceScheduleModel>();
+            if (searchType == "id")
+            {
+                if (int.TryParse(searchValue, out int id))
+                {
+                    response = await MaintenanceScheduleService.GetById(id);
+                    if (response.Item1 != null)
+                    {
+                        var maintenance = JsonSerializer.Deserialize<MaintenanceScheduleModel>(response.Item1);
+                        if (maintenance != null)
+                            maintenanceList.Add(maintenance);
+                    }
+                    else
+                    {
+                        errorMessage = response.Item2;
+                        return;
+                    }
+                }
+                else
+                {
+                    errorMessage = "Nhập dữ liệu không hợp lệ";
+                    return;
+                }
+            }
+            else
+            {
+                response = await MaintenanceScheduleService.GetByFieldId(searchType, searchValue);
+                if (response.Item1 != null)
+                {
+                    maintenanceList = JsonSerializer.Deserialize<List<MaintenanceScheduleModel>>(response.Item1);
+                }
+                else
+                {
+                    errorMessage = response.Item2;
+                    return;
+                }
+            }
+
+            maintenanceSchedules = maintenanceList;
+            selectedMaintenanceSchedules = new List<MaintenanceScheduleModel>() { maintenanceSchedules.FirstOrDefault() };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = ex.ToString();
+        }
+    }
+
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+
+    private async Task CompleteRepair(int id)
+    {
+        try
+        {
+            var response = await MaintenanceScheduleService.CompleteMaintenance(id);
+            if (response.Item1 == true)
+            {
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+
+    private bool CheckRepaired(int equipmentId)
+    {
+        try
+        {
+            var eq = equipments.SingleOrDefault(e => e.id == equipmentId);
+            if (eq != null)
+            {
+                if (eq.status_Id == 1)
+                    return true;
+                else return false;
+            }
+            else return false;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+}

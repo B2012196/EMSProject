@@ -1,0 +1,202 @@
+﻿@page "/product-input"
+@inject InventoryOrderService InventoryOrderService
+@inject InventoryService InventoryService
+@inject OrderDetailService OrderDetailService
+@using System.Collections.Generic
+
+<PageTitle>Inventory Orders</PageTitle>
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="id">Id</option>
+        <!-- Thêm các loại tìm kiếm khác nếu cần -->
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchOrders()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+    <RadzenButton Click="ToggleAddNewForm" Text="Add New" Icon="add_circle_outline" ButtonStyle="ButtonStyle.Primary" />
+    <br />
+    @if (showAddNewForm)
+    {
+        <EditForm Model="this">
+            <RadzenTemplateForm Data="@this">
+                <ChildContent Context="templateFormContext">
+                    <br/>
+                    <div class="form-group">
+                        <label for="quantity">Số vật tư</label>
+                        <RadzenNumeric @bind-Value="quantity" Min="1" />
+                    </div>
+                    <br/>
+                    <RadzenButton Text="Tiếp tục" Click="@(() => ShowProductDetails())" />
+                </ChildContent>
+            </RadzenTemplateForm>
+        </EditForm>
+        <br />
+        @if (showDetails)
+        {
+            <EditForm Model="orderDetails" OnValidSubmit="HandleValidSubmit">
+                <ChildContent Context="editFormContext">
+                    @foreach (var detail in orderDetails)
+                    {
+                        <div class="form-group">
+                            <label for="productName">Mã vật tư</label>
+                            <RadzenNumeric @bind-Value="detail.InventoryId" />
+                            <label for="productQuantity">Số lượng:</label>
+                            <RadzenNumeric @bind-Value="detail.Quantity" />
+                        </div>
+                        <hr />
+                    }
+                    <RadzenButton Text="Lưu" ButtonType="ButtonType.Submit" />
+                </ChildContent>
+            </EditForm>
+        }
+    }
+</div>
+<br/>
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+<br/>
+@if (orders != null && orders.Any())
+{
+    <RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                    Data="@orders" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedOrders>
+        <Columns>
+            <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="60px" TextAlign="TextAlign.Center" />
+            <RadzenDataGridColumn Property="orderDate" Title="Order Date" Frozen="true" Width="120px" />
+            <RadzenDataGridColumn Property="toTalInventory" Title="Quatity" Width="120px" />
+        </Columns>
+    </RadzenDataGrid>
+}
+
+@code {
+
+    IEnumerable<InventoryModel> inventories;
+    IEnumerable<InventoryOrderModel> orders;
+    IList<InventoryOrderModel> selectedOrders;
+    private int quantity;
+    private int total;
+    private bool showDetails = false;
+    private bool showAddNewForm = false;
+    private string searchType = "Model_Id";
+    private string searchValue = string.Empty;
+    private List<OrderDetailDto> orderDetails = new List<OrderDetailDto>();
+    private string errorMessage;
+    private InventoryOrderDto inventoryOrderDto = new InventoryOrderDto();
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        var responseIn = await InventoryService.GetAllInventories();
+        inventories = responseIn.Item1;
+
+        var response = await InventoryOrderService.GetAllOrders();
+        if (response.Item1 != null)
+            orders = response.Item1;
+        else
+        {
+            errorMessage = response.Item2;
+            return;
+        }
+        selectedOrders = new List<InventoryOrderModel>() { orders.FirstOrDefault() };
+
+    }
+
+    private void ShowProductDetails()
+    {
+        showDetails = true;
+        orderDetails = new List<OrderDetailDto>();
+        for (int i = 0; i < quantity; i++)
+        {
+            orderDetails.Add(new OrderDetailDto());
+        }
+    }
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+
+    private async void HandleValidSubmit()
+    {
+        total = 0;
+        var response = await InventoryOrderService.CreateNewOrder(0);
+        if(response.Item1 == true)
+        {
+            foreach (var detail in orderDetails)
+            {
+                detail.OrderId = response.Item3;
+                total += detail.Quantity;
+            }
+            var result = await OrderDetailService.CreateNewOrderDetail(orderDetails);
+            if (result.Item1 == true)
+            {
+                inventoryOrderDto.Id = response.Item3;
+                inventoryOrderDto.ToTalInventory = total;
+                var kq = await InventoryOrderService.UpdateQuatityOrder(inventoryOrderDto);
+                if (kq.Item1 == false)
+                {
+                    errorMessage = kq.Item2;
+                    await InventoryOrderService.DeleteOrder(response.Item3);
+                    StateHasChanged();
+                    await OnInitializedAsync();
+                }
+                else
+                {
+                    errorMessage = "";
+                    showAddNewForm = !showAddNewForm;
+                    StateHasChanged();
+                }
+            }
+            else 
+            {
+                errorMessage = result.Item2;
+                await InventoryOrderService.DeleteOrder(response.Item3);
+                StateHasChanged();
+            }
+        }
+        else
+        {
+            errorMessage = response.Item2;
+            await InventoryOrderService.DeleteOrder(response.Item3);
+            StateHasChanged();
+        }
+    }
+
+    private async Task SearchOrders()
+    {
+        try
+        {
+            var response = ("", "");
+            List<InventoryOrderModel> inventoryOrdersList = new List<InventoryOrderModel>();
+            if (int.TryParse(searchValue, out int id))
+            {
+                response = await InventoryOrderService.GetById(id);
+                if (response.Item1 != null)
+                {
+                    var order = JsonSerializer.Deserialize<InventoryOrderModel>(response.Item1);
+                    if (order != null)
+                        inventoryOrdersList.Add(order);
+                }
+                else
+                {
+                    errorMessage = response.Item2;
+                    return;
+                }
+            }
+            else
+            {
+                errorMessage = "Nhập dữ liệu không hợp lệ";
+                return;
+            }
+            orders = inventoryOrdersList;
+            selectedOrders = new List<InventoryOrderModel>() { orders.FirstOrDefault() };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = ex.ToString();
+        }
+    }
+}

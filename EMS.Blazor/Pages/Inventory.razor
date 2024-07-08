@@ -1,0 +1,197 @@
+﻿@page "/inventory"
+@inject InventoryService InventoryService
+@inject LocationService LocationService
+
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="id">Id</option>
+        <option value="locationName">Location name</option>
+        <!-- Thêm các loại tìm kiếm khác nếu cần -->
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchInventory()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+    <RadzenButton Click="ToggleAddNewForm" Text="Add New" Icon="add_circle_outline" ButtonStyle="ButtonStyle.Primary" />
+    <br />
+    @if (showAddNewForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="inventoryDto" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="name">Tên</label>
+                    <InputText id="Name" @bind-Value="inventoryDto.Name" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="loai">Loại</label>
+                    <RadzenDropDown @bind-Value="inventoryDto.isAccessories" Data="@options" TextProperty="DisplayName" ValueProperty="isAccessory" Class="form-control" />
+
+                </div>
+                <div class="form-group">
+                    <label for="lownumber">Số lượng thấp nhất</label>
+                    <InputNumber id="lownumber" @bind-Value="inventoryDto.LowestQuantity" class="form-control" />
+                </div>
+
+                <div class="form-group">
+                    <label for="location">Vị trí</label>
+                    @* <InputNumber id="room" @bind-Value="inventoryDto.LocationId" class="form-control" /> *@
+                    <RadzenDropDown @bind-Value="inventoryDto.LocationId" Data="@locations" TextProperty="DisplayName" ValueProperty=id Class="form-control" />
+                </div>
+
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+            </EditForm>
+        </div>
+    }
+</div>
+<br/>
+@if (inventories != null && inventories.Any())
+{
+    <RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                    Data="@inventories" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedInventories>
+        <Columns>
+            <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="60px" TextAlign="TextAlign.Center" />
+            <RadzenDataGridColumn Property="name" Title="Name" Frozen="true" Width="120px" />
+            <RadzenDataGridColumn Property="quatity" Title="Quatity" Width="80px" />
+            <RadzenDataGridColumn Property="lowestQuantity" Title="Lowest Quantity" Width="80px" />
+            <RadzenDataGridColumn Property="locationId" Title="Location" Width="150px">
+                <Template Context="eq">
+                    @getLocationName(eq.locationId)
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+}
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@code {
+    IEnumerable<InventoryModel> inventories;
+    IList<InventoryModel> selectedInventories;
+    IEnumerable<Locations> locations;
+    private InventoryDto inventoryDto = new InventoryDto();
+    private string searchType = "id";
+    private string searchValue = string.Empty;
+    private string errorMessage;
+    private bool showAddNewForm = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await InventoryService.GetAllInventories();
+        inventories = response.Item1;
+        errorMessage = response.Item2;
+        selectedInventories = new List<InventoryModel>() { inventories.FirstOrDefault() };
+        locations = await LocationService.GetAllLocations();
+    }
+
+    private async Task SearchInventory()
+    {
+        try
+        {
+            var response = ("", "");
+            List<InventoryModel> inventoriesList = new List<InventoryModel>();
+            if(searchType == "id")
+            {
+                if (int.TryParse(searchValue, out int id))
+                {
+                    response = await InventoryService.GetById(id);
+                    if (response.Item1 != null)
+                    {
+                        var location = JsonSerializer.Deserialize<InventoryModel>(response.Item1);
+                        if (location != null)
+                            inventoriesList.Add(location);
+                    }
+                    else
+                    {
+                        errorMessage = response.Item2;
+                        return;
+                    }
+                }
+                else
+                {
+                    errorMessage = "Nhập dữ liệu không hợp lệ";
+                    return;
+                }
+            }
+            else
+            {
+                response = await InventoryService.GetByFieldId(searchType, searchValue);
+                if (response.Item1 != null)
+                {
+                    inventoriesList = JsonSerializer.Deserialize<List<InventoryModel>>(response.Item1);
+                }
+                else
+                {
+                    errorMessage = response.Item2;
+                    return;
+                }
+            }
+            inventories = inventoriesList;
+            selectedInventories = new List<InventoryModel>() { inventories.FirstOrDefault() };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = ex.ToString();
+        }
+    }
+
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+
+    private void CancelAddNewForm()
+    {
+        showAddNewForm = false;
+        errorMessage = null;
+    }
+    private string getLocationName(int locationId)
+    {
+        var location = locations.SingleOrDefault(l => l.id == locationId);
+        return location != null ? location.DisplayName : "Unknown";
+    }
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            inventoryDto.Quatity = 0;
+            var response = await InventoryService.CreateNewInventory(inventoryDto);
+            if(response.Item1 == true)
+            {
+                inventoryDto = new InventoryDto();
+                showAddNewForm = false;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch
+        {
+            errorMessage = "Error";
+        }
+    }
+
+    private List<Item> options = new List<Item>
+    {
+        new Item { isAccessory = false, DisplayName = "Vật tư" },
+        new Item { isAccessory = true, DisplayName = "Phụ tùng" }
+    };
+
+    public class Item
+    {
+        public bool isAccessory { get; set; }
+        public string DisplayName { get; set; }
+    }
+}
+

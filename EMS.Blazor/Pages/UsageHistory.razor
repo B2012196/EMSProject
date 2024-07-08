@@ -1,0 +1,158 @@
+﻿@page "/usagehistory"
+@inject NavigationManager Navigation
+@inject UsageHistoryService UsageHistoryService
+@inject EquipmentService EquipmentService
+@inject UserService UserService
+<PageTitle>Usage History</PageTitle>
+
+<h3>Usage Histories</h3>
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        @* <option value="id">Id</option> *@
+        <option value="equipmentid">Tên thiết bị</option>
+        <option value="userid">Người sử dụng</option>
+        <!-- Thêm các loại tìm kiếm khác nếu cần -->
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchUsageHistories()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+</div>
+<br/>
+<RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                Data="@usageHistories" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" 
+                @bind-Value=@selectedUsageHistories>
+    <Columns>
+        <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="50px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="userId" Title="Full name" Frozen="true" Width="80px">
+            <Template Context="e">
+                @getUserName(e.userId)
+            </Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Property="equipmentId" Title="Equipment name" Frozen="true" Width="160px" >
+            <Template Context="e">
+                @getEquipmentName(e.equipmentId)
+            </Template>
+        </RadzenDataGridColumn>
+        <RadzenDataGridColumn Property="startTime" Title="Start Time" Frozen="true" Width="100px" />
+        <RadzenDataGridColumn Property="endTime" Title="End Time" Frozen="true" Width="100px" />
+        
+        <RadzenDataGridColumn Width="100px" Title="">
+            <Template Context="data">
+                @if(data.endTime == null)
+                {
+                    <RadzenButton Text="Completed" Click=@(() => CompleteEquipment(data.id)) ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter" Icon="info" class="m-1" />
+                }
+            </Template>
+        </RadzenDataGridColumn>
+
+    </Columns>
+</RadzenDataGrid>
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@code {
+    IEnumerable<UsageHistoryModel> usageHistories;
+    IList<UsageHistoryModel> selectedUsageHistories;
+    IEnumerable<Equipment> equipments;
+    IEnumerable<UserModel> usermodels;
+    private string errorMessage;
+    private string searchType = "Id";
+    private string searchValue = string.Empty;
+    protected override async Task OnInitializedAsync()
+    {
+        usageHistories = await UsageHistoryService.GetAllUsageHistories();
+
+        selectedUsageHistories = new List<UsageHistoryModel>() { usageHistories.FirstOrDefault() };
+        var result = await EquipmentService.GetAllEquipments();
+        equipments = result.Item1;
+
+        var response = await UserService.GetAllFullname();
+        if(response.Item1 == null)
+        {
+            errorMessage = response.Item2;
+            return;
+        }
+        usermodels = response.Item1;
+    }
+
+    private async Task CompleteEquipment(int id)
+    {
+        try
+        {
+            var response = await UsageHistoryService.CompleteUsageHistory(id);
+            if (response.Item1 != false)
+            {
+                errorMessage = response.Item2;
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch
+        {
+
+        }
+    }
+
+    private string getEquipmentName(int equipmentId)
+    {
+        var equipment = equipments.SingleOrDefault(e => e.id == equipmentId);
+        return equipment != null ? equipment.name : "Unknown";
+    }
+
+    private string getUserName(int userId)
+    {
+        if (usermodels != null)
+        {
+            var user = usermodels.SingleOrDefault(u => u.id == userId);
+            return user != null ? user.fullName : "Unknown";
+        }
+        else
+        {
+            // Navigation.NavigateTo("/login");
+            return "";
+        }
+    }
+
+    private async Task SearchUsageHistories()
+    {
+        try
+        {
+            var result = await UsageHistoryService.GetByFieldId(searchType, searchValue); 
+            List<UsageHistoryModel> usageList = new List<UsageHistoryModel>();
+            if (result.Item1 != null)
+            {
+
+                if (searchType == "id")
+                {
+                    var usage = JsonSerializer.Deserialize<UsageHistoryModel>(result.Item1);
+                    if (usage != null)
+                    {
+                        usageList.Add(usage);
+                    }
+                }
+                else if (searchType == "equipmentid" || searchType == "userid")
+                {
+                    usageList = JsonSerializer.Deserialize<List<UsageHistoryModel>>(result.Item1);
+
+                }
+
+                usageHistories = usageList;
+                selectedUsageHistories = new List<UsageHistoryModel>() { usageHistories?.FirstOrDefault() };
+
+            }
+            else errorMessage = result.Item2;
+        }
+        catch (JsonException ex)
+        {
+            Console.WriteLine($"Error parsing JSON: {ex.Message}");
+        }
+
+    }
+}

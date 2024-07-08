@@ -1,0 +1,33 @@
+﻿@page "/statistics"
+@using Radzen
+@using System.Net.Http.Json
+@inject HttpClient Http
+
+<RadzenCard>
+    <ChildContent>
+        <RadzenGrid Data="@summaryDataList" TItem="MaintenanceSummaryDto">
+            <Columns>
+                <RadzenGridColumn TItem="MaintenanceSummaryDto" Property="RepairedCount" Title="Repaired Count" />
+                <RadzenGridColumn TItem="MaintenanceSummaryDto" Property="NotRepairedCount" Title="Not Repaired Count" />
+            </Columns>
+        </RadzenGrid>
+    </ChildContent>
+</RadzenCard>
+
+@code {
+    private List<MaintenanceSummaryDto> summaryDataList = new List<MaintenanceSummaryDto>();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task LoadData()
+    {
+        var summary = await Http.GetFromJsonAsync<MaintenanceSummaryDto>("https://localhost:7008/api/MaintenanceSchedules/summary");
+        if (summary != null)
+        {
+            summaryDataList.Add(summary);
+        }
+    }
+}

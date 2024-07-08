@@ -1,0 +1,92 @@
+﻿@page "/status"
+
+@inject StatusService StatusService
+
+<PageTitle>Status</PageTitle>
+
+<RadzenButton Click="ToggleAddNewForm" Text="Add New" Icon="add_circle_outline" ButtonStyle="ButtonStyle.Primary" />
+<br />
+@if (showAddNewForm)
+{
+    <div class="add-new-form">
+        <EditForm Model="statusDto" OnValidSubmit="HandleValidSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-group">
+                <label for="name">Tên:</label>
+                <InputText id="name" @bind-Value="statusDto.Name" class="form-control" />
+            </div>
+            <br />
+            <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+        </EditForm>
+    </div>
+}
+
+<br />
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+<RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                Data="@statusModels" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedStatusModels>
+    <Columns>
+        <RadzenDataGridColumn Property="Id" Filterable="false" Title="ID" Frozen="true" Width="80px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="Name" Title="Name" Frozen="true" Width="160px" />
+
+    </Columns>
+</RadzenDataGrid>
+
+
+@code {
+    IEnumerable<StatusModel> statusModels;
+    IList<StatusModel> selectedStatusModels;
+    private StatusDto statusDto = new StatusDto();
+    private string errorMessage;
+    private bool showAddNewForm = false;
+    private bool showUpdateForm = false;
+    protected override async Task OnInitializedAsync()
+    {
+        statusModels = await StatusService.GetAllStatus();
+        selectedStatusModels = new List<StatusModel>() { statusModels.FirstOrDefault() };
+    }
+    private void CancelAddNewForm()
+    {
+        showAddNewForm = false;
+        errorMessage = null;
+    }
+    private void CancelUpdateForm()
+    {
+        showUpdateForm = !showUpdateForm;
+        errorMessage = null;
+    }
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var response = await StatusService.CreateNewStatus(statusDto);
+            if (response.Item1 == true)
+            {
+                statusDto = new StatusDto();
+                showAddNewForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+}

@@ -1,0 +1,460 @@
+﻿@page "/equipment-details/{id:int}"
+@inject EquipmentService EquipmentService
+@inject ModelService ModelService
+@inject ManufacturerService ManufacturerService
+@inject StatusService StatusService
+@inject LocationService LocationService
+@inject NavigationManager Navigation
+@inject UserService UserService
+@inject UsageHistoryService UsageHistoryService
+@inject EquipmentTransferService EquipmentTransferService
+@inject MaintenanceScheduleService MaintenanceScheduleService
+@inject ReplacementRecordService ReplacementRecordService
+@inject InventoryService InventoryService
+@inject HttpClient Http
+@if (equipment != null)
+{
+    <RadzenCard Class="rz-my-12 rz-mx-auto" Style="max-width: 680px">
+        <RadzenStack Orientation="Orientation.Horizontal" JustifyContent="JustifyContent.Start" Gap="1rem" Class="rz-p-4">
+            <RadzenStack Gap="0">
+                <RadzenText TextStyle="TextStyle.Overline" class="rz-display-flex rz-mt-2 rz-my-0" Style="font-size: 15px;">Tên thiết bị</RadzenText>
+                <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 15px;"><b></b>@equipment.name</RadzenText>
+                <RadzenText TextStyle="TextStyle.Overline" class="rz-display-flex rz-mt-4 rz-mb-0" Style="font-size: 15px;">Model</RadzenText>
+                <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 15px;"><b></b>@getModelName(equipment.model_Id)</RadzenText>
+            </RadzenStack>
+                @if (!string.IsNullOrEmpty(qrCodeUrl))
+                {
+                    <RadzenStack>
+                        <RadzenImage Src="@qrCodeUrl" Style="max-width: 250px; max-height: 250px;" />
+                    </RadzenStack>
+                }
+            
+        </RadzenStack>
+        <RadzenCard class="rz-background-color-primary-light rz-shadow-0 rz-border-radius-0 rz-p-8" style="margin: 1rem calc(-1 * var(--rz-card-padding));">
+            <RadzenRow RowGap="0">
+                <RadzenColumn SizeSM="6">
+                    <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0" Style="font-size: 15px;">Id</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 14px;" class="rz-color-on-primary-light"><b>@equipment.id</b></RadzenText>
+                    <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0" Style="font-size: 15px;">Seri</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 14px;" class="rz-color-on-primary-light"><b>@equipment.seri</b></RadzenText>
+                    <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0" Style="font-size: 15px;">Ngày sản xuất</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 14px;" class="rz-color-on-primary-light"><b>@equipment.mfg</b></RadzenText>
+                    <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0" Style="font-size: 15px;">Nhà sản xuất</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 14px;" class="rz-color-on-primary-light"><b></b>@getManufacturerName(equipment.manufacturer_Id)</RadzenText>
+                    </RadzenColumn>
+                <RadzenColumn SizeSM="6">
+                    <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0" Style="font-size: 15px;">Ngày mua</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 14px;" class="rz-color-on-primary-light"><b>@equipment.purchase_Date</b></RadzenText>
+                    <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0" Style="font-size: 15px;">Trạng thái</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 14px;" class="rz-color-on-primary-light"><b>@getStatusName(equipment.status_Id)</b></RadzenText>
+                    <RadzenText TextStyle="TextStyle.Overline" class="rz-color-on-primary-light rz-display-flex rz-mt-4 rz-mb-0" Style="font-size: 15px;">Vị trí</RadzenText>
+                    <RadzenText TextStyle="TextStyle.Body1" Style="font-size: 14px;" class="rz-color-on-primary-light"><b>@getLocationName(equipment.location_Id)</b></RadzenText>
+                </RadzenColumn>
+            </RadzenRow>
+        </RadzenCard>
+        <RadzenStack Orientation="Orientation.Horizontal" AlignItems="AlignItems.Center" Gap="1rem" JustifyContent="JustifyContent.Center" Wrap="FlexWrap.Wrap">
+            @* <RadzenButton Click="ExitPage" Variant="Variant.Flat" Shade="Shade.Lighter" Text="Thoát" ButtonStyle="ButtonStyle.Primary" /> *@
+
+            <RadzenButton Click="ToggleTransferForm" Variant="Variant.Flat" Shade="Shade.Lighter" Text="Chuyển" ButtonStyle="ButtonStyle.Warning" />
+            <RadzenButton Click="ToggleRepairForm" Variant="Variant.Flat" Shade="Shade.Lighter" Text="Sửa chữa" ButtonStyle="ButtonStyle.Light" />
+            <RadzenButton Click="ToggleReplaceForm" Variant="Variant.Flat" Shade="Shade.Lighter" Text="Thay thế phụ tùng" ButtonStyle="ButtonStyle.Primary" />
+            <RadzenButton Click="@(async () => await GenerateQRCode())" Text="Tạo QR Code" Variant="Variant.Flat" Shade="Shade.Lighter"  ButtonStyle="ButtonStyle.Secondary" />
+            <RadzenButton Click="UseEquipment" Variant="Variant.Flat" Shade="Shade.Lighter" Text="Sử dụng" ButtonStyle="ButtonStyle.Success" />
+            <RadzenButton Click="ToggleAddNewForm" Variant="Variant.Flat" Shade="Shade.Lighter" Text="Cập nhật" ButtonStyle="ButtonStyle.Info" />
+            @* <RadzenButton Click="deleteEquipment" Variant="Variant.Flat" Shade="Shade.Lighter" Text="Xóa" ButtonStyle="ButtonStyle.Danger" /> *@
+        </RadzenStack>
+    </RadzenCard>
+
+    @if (showAddNewForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="equipmentDtoUser" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <InputText id="name" @bind-Value="equipmentDtoUser.Name" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="mfg">Manufacture Date:</label>
+                    <InputDate id="mfg" @bind-Value="equipmentDtoUser.Mfg" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="model_Id">Model Id</label>
+                    @* <InputNumber id="model_Id" @bind-Value="equipmentDto.Model_Id" class="form-control" /> *@
+                    <RadzenDropDown @bind-Value="equipmentDtoUser.Model_Id" Data="@models" TextProperty="name" ValueProperty=id Class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="manufacturer_Id">Manufacturer Id</label>
+                    <RadzenDropDown @bind-Value="equipmentDtoUser.Manufacturer_Id" Data="@manufacturers" TextProperty="name" ValueProperty=id Class="form-control" />
+                    @* <InputNumber id="manufacturer_Id" @bind-Value="equipmentDto.Manufacturer_Id" class="form-control" /> *@
+                </div>
+                <div class="form-group">
+                    <label for="status_Id">Status Id:</label>
+                    @* <InputNumber id="status_Id" @bind-Value="equipmentDto.Status_Id" class="form-control" /> *@
+                    <RadzenDropDown @bind-Value="equipmentDtoUser.Status_Id" Data="@statusModels" TextProperty="Name" ValueProperty=Id Class="form-control" />
+
+                </div>
+                <div class="form-group">
+                    <label for="location_Id">Location Id</label>
+                    @* <InputNumber id="location_Id" @bind-Value="equipmentDto.Location_Id" class="form-control" /> *@
+                    <RadzenDropDown @bind-Value="equipmentDtoUser.Location_Id" Data="@locations" TextProperty="DisplayName" ValueProperty=id Class="form-control" />
+                </div>
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+            </EditForm>
+        </div>
+    }
+
+    @if (showTransferForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="equipmentTransferDto" OnValidSubmit="Transfer">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="location_Id">Received Location</label>
+                    @* <InputNumber id="location_Id" @bind-Value="equipmentDto.Location_Id" class="form-control" /> *@
+                    <RadzenDropDown @bind-Value="equipmentTransferDto.ReceivedLocationId" Data="@locations" TextProperty="DisplayName" ValueProperty=id Class="form-control" />
+                </div>
+                
+                <div class="form-group">
+                    <label for="note">Note</label>
+                    <InputText id="note" @bind-Value="equipmentTransferDto.Note" class="form-control" /> 
+                </div> 
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelTransferForm" />
+            </EditForm>
+        </div>
+    }
+
+    @if (showMaintenanceForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="maintenanceScheduleDto" OnValidSubmit="RepairEquipment">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+                
+                <div class="form-group">
+                    <label for="decription">Decription</label>
+                    <InputText id="decription" @bind-Value="maintenanceScheduleDto.Description" class="form-control" /> 
+                </div> 
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelMaintenanceForm" />
+            </EditForm>
+        </div>
+    }
+
+    @if (showReplaceForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="replacementRecordDto" OnValidSubmit="Replace">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">                  
+                    <RadzenDropDown @bind-Value="replacementRecordDto.InventoryId" Data="@inventories" TextProperty="name" ValueProperty=id Class="form-control" />
+                    <br/>
+                    <InputNumber id="quatity" @bind-Value="replacementRecordDto.QuantityUsed" class="form-control" />
+                </div>
+
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelReplaceForm" />
+            </EditForm>
+        </div>
+    }
+
+
+
+}
+@* else
+{
+    <p>Không tìm thấy dữ liệu cho ID này.</p> 
+} *@
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@code {
+    [Parameter]
+    public int Id { get; set; }
+    private Equipment equipment;
+    IEnumerable<Models> models;
+    IEnumerable<Manufacturers> manufacturers;
+    IEnumerable<StatusModel> statusModels;
+    IEnumerable<Locations> locations;
+    IEnumerable<Equipment> equipments;
+    IEnumerable<InventoryModel> inventories;
+    private EquipmentDto equipmentDto = new EquipmentDto();
+    private bool showAddNewForm = false;
+    private bool showTransferForm = false;
+    private bool showMaintenanceForm = false;
+    private bool showReplaceForm = false;
+    private string errorMessage;
+    private string qrCodeUrl;
+    private EquipmentDtoUser equipmentDtoUser = new EquipmentDtoUser();
+    private UsageHistoryDto usageHistoryDto = new UsageHistoryDto();
+    private EquipmentTransferDto equipmentTransferDto = new EquipmentTransferDto();
+    private MaintenanceScheduleDto maintenanceScheduleDto = new MaintenanceScheduleDto();
+    private ReplacementRecordDto replacementRecordDto = new ReplacementRecordDto();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            bool checkuser = await UserService.IsLoggedInAsync();
+            if (!checkuser)
+            {
+                Navigation.NavigateTo("/login");
+                return;
+            }
+            var result = await EquipmentService.GetAllEquipments();
+            equipments = result.Item1;
+            errorMessage = result.Item2;
+
+            equipment = await EquipmentService.GetById(Id);
+            models = await ModelService.GetAllModels();
+            manufacturers = await ManufacturerService.GetAllManufacturers();
+            statusModels = await StatusService.GetAllStatus();
+            locations = await LocationService.GetAllLocations();
+
+            var kq = await InventoryService.GetAllInventories();
+            if (kq.Item1 != null)
+            {
+                var inven = inventories = kq.Item1;
+                inventories = inven.Where(i => i.locationId == equipment.location_Id
+                                          && i.isAccessories == true).ToList();
+            }
+            else errorMessage = kq.Item2;
+
+            StateHasChanged(); // Yêu cầu Blazor render lại component sau khi đã cập nhật dữ liệu
+        }
+    }
+
+    private string getStatusName(int statusId)
+    {
+        var status = statusModels.SingleOrDefault(s => s.Id == statusId);
+        return status != null ? status.Name : "Unknown";
+    }
+
+    private string getLocationName(int locationId)
+    {
+        var location = locations.SingleOrDefault(l => l.id == locationId);
+        return location != null ? location.DisplayName : "Unknown";
+    }
+
+    private string getManufacturerName(int manufacturerId)
+    {
+        var manufacturer = manufacturers.SingleOrDefault(l => l.id == manufacturerId);
+        return manufacturer != null ? manufacturer.name : "Unknown";
+    }
+
+    private string getModelName(int modelId)
+    {
+        var model = models.SingleOrDefault(l => l.id == modelId);
+        return model != null ? model.name : "Unknown";
+    }
+
+    // private async void deleteEquipment()
+    // {
+    //     try
+    //     {
+    //         var response = await EquipmentService.DeleteEquipment(Id);
+    //         if (response.Item1)
+    //         {
+    //             Navigation.NavigateTo("/");
+    //         }
+    //         else
+    //         {
+    //             Console.WriteLine(response.Item2);
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         Console.WriteLine("Error: ", ex);
+    //     }
+    // }
+
+    private void ExitPage()
+    {
+        Navigation.NavigateTo("/");
+    }
+
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+
+    private void ToggleReplaceForm()
+    {
+        if (inventories.Any())
+            showReplaceForm = !showReplaceForm;
+        else errorMessage = "Không có phụ tùng trong kho";
+    }
+
+    private void ToggleRepairForm()
+    {
+        showMaintenanceForm = !showMaintenanceForm;
+    }
+
+
+    private void ToggleTransferForm()
+    {
+        showTransferForm = !showTransferForm;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            equipmentDtoUser.Id = Id;
+            var response = await EquipmentService.UpdateEquipment(equipmentDtoUser);
+            if (response == "Cập nhật thiết bị thành công")
+            {
+                equipmentDtoUser = new EquipmentDtoUser(); // Reset the form
+                showAddNewForm = false; // Hide the form
+                Navigation.NavigateTo("/");
+            }
+            else
+            {
+                errorMessage = response;
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"An error occurred while adding the equipment: {ex.Message}");
+        }
+    }
+
+    private void CancelAddNewForm()
+    {
+        showAddNewForm = false;
+        errorMessage = null;
+    }
+
+    private void CancelMaintenanceForm()
+    {
+        showMaintenanceForm = false;
+        errorMessage = null;
+    }
+
+    private void CancelTransferForm()
+    {
+        showTransferForm = !showTransferForm;
+        errorMessage = null;
+    }
+    private void CancelReplaceForm()
+    {
+        showReplaceForm = !showReplaceForm;
+        errorMessage = null;
+    }
+
+    private async Task GenerateQRCode()
+    {
+        var data = $"ID: {equipment.id} - {equipment.name}";
+        var imageBytes = await Http.GetByteArrayAsync($"https://localhost:7008/api/QRCode/{data}");
+        qrCodeUrl = $"data:image/png;base64,{Convert.ToBase64String(imageBytes)}";
+    }
+
+    private async Task UseEquipment()
+    {
+        try
+        {
+            //1. Lấy id từ getbyName
+            var response = await UserService.GetUserByName();
+            if (response.Item1 == null)
+            {
+                errorMessage = response.Item2;
+            }
+            else
+            {
+                usageHistoryDto.UserId = response.Item1.id;
+                usageHistoryDto.EquipmentId = Id;
+                var result = await UsageHistoryService.CreateNewUsageHistory(usageHistoryDto);
+
+                if(result.Item1 != false)
+                {
+                    errorMessage = result.Item2;
+                    Navigation.NavigateTo("/usagehistory");
+                }
+                else
+                {
+                    errorMessage = result.Item2;
+                }
+
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = ex.ToString();
+        }
+    }
+
+    private async Task Transfer()
+    {
+        equipmentTransferDto.EquipmentId = equipment.id;
+        var response = await EquipmentTransferService.TransferEquipment(equipmentTransferDto);
+        if (response.Item1 == false)
+        {
+            errorMessage = response.Item2;
+        }
+        else
+        {
+            Navigation.NavigateTo("/equipmenttransfer");
+        }
+    }
+    private async Task Replace()
+    {
+        try
+        {
+            replacementRecordDto.EquipmentId = equipment.id;
+            var response = await ReplacementRecordService.CreateReplaceRecord(replacementRecordDto);
+            if(response.Item1 == false)
+            {
+                errorMessage = response.Item2;
+            }
+            else
+            {
+                Navigation.NavigateTo("/inventory");
+            }
+        }
+
+        catch
+        {
+
+        }
+    }
+    private async Task RepairEquipment(){
+
+        try
+        {
+            maintenanceScheduleDto.EquipmentId = equipment.id;
+            var response = await MaintenanceScheduleService.CreateNewMaintenance(maintenanceScheduleDto);
+            if (response.Item1 == true)
+            {
+                maintenanceScheduleDto = new MaintenanceScheduleDto();
+                showMaintenanceForm = false;
+                errorMessage = null;
+                Navigation.NavigateTo("/maintenanceschedules");
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+}

@@ -1,0 +1,234 @@
+﻿@page "/location"
+@using EMS.Blazor.Model
+@inject LocationService LocationService
+
+<PageTitle>Locations</PageTitle>
+
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="id">Id</option>
+        <option value="name">Name</option>
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchLocations()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+    <RadzenButton Click="ToggleAddNewForm" Text="Add New" Icon="add_circle_outline" ButtonStyle="ButtonStyle.Primary" />
+    <br />
+    @if (showAddNewForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="locationDto" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="name">Tên:</label>
+                    <InputText id="name" @bind-Value="locationDto.Name" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="floor">Tầng:</label>
+                    <InputNumber id="floor" @bind-Value="locationDto.Floor" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="room">Số phòng:</label>
+                    <InputText id="room" @bind-Value="locationDto.RoomNumber" class="form-control" />
+                </div>
+
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+            </EditForm>
+        </div>
+    }
+</div>
+<br />
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+<RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                Data="@locations" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedLocations>
+    <Columns>
+        <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="60px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="name" Title="Name" Frozen="true" Width="120px" />
+        <RadzenDataGridColumn Property="floor" Title="Floor" Width="120px" />
+        <RadzenDataGridColumn Property="roomNumber" Title="RoomNumber" Width="120px"/>
+        <RadzenDataGridColumn Width="100px" Title="">
+            <Template Context="data">
+                <RadzenButton Text="Cập nhật" Click=@(() => ToggleUpdateForm(data.id)) ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter" Icon="info" class="rz-py-0" />
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+@if (showUpdateForm)
+{
+    <div class="add-new-form">
+        <EditForm Model="locationModel" OnValidSubmit="HandleValidUpdate">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-group">
+                <label for="name">Tên:</label>
+                <InputText id="name" @bind-Value="locationModel.name" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="floor">Tầng:</label>
+                <InputNumber id="floor" @bind-Value="locationModel.floor" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="room">Số phòng:</label>
+                <InputText id="room" @bind-Value="locationModel.roomNumber" class="form-control" />
+            </div>
+
+            <br />
+            <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelUpdateForm" />
+        </EditForm>
+    </div>
+}
+
+@code {
+    IEnumerable<Locations> locations;
+    IList<Locations> selectedLocations;
+    private Locations locationModel = new Locations();
+    private LocationDto locationDto = new LocationDto();
+    private string errorMessage;
+    private string searchType = "name";
+    private string searchValue = string.Empty;
+    private bool showAddNewForm = false;
+    private bool showUpdateForm = false;
+    private int dataId = 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        locations = await LocationService.GetAllLocations();
+        selectedLocations = new List<Locations>() { locations.FirstOrDefault() };
+    }
+
+    private async Task SearchLocations()
+    {
+        try
+        {
+            var response = ("", "");
+
+            List<Locations> modelList = new List<Locations>();
+            if (searchType == "id")
+            {
+                if (int.TryParse(searchValue, out int id))
+                {
+                    response = await LocationService.GetById(id);
+                    if (response.Item1 != null)
+                    {
+                        var location = JsonSerializer.Deserialize<Locations>(response.Item1);
+                        if (location != null)
+                            modelList.Add(location);
+                    }
+                    else 
+                    {
+                        errorMessage = response.Item2;
+                        return;
+                    }
+                }
+                else
+                {
+                    errorMessage = "Nhập dữ liệu không hợp lệ";
+                    return;
+                }
+            }
+            else
+            {
+                response = await LocationService.GetByFieldId(searchType, searchValue);
+                if (response.Item1 != null)
+                {
+                    modelList = JsonSerializer.Deserialize<List<Locations>>(response.Item1);
+                }
+                else {
+                    errorMessage = response.Item2;
+                    return;
+                }
+            }
+
+            locations = modelList;
+            selectedLocations = new List<Locations>() { locations.FirstOrDefault() };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = ex.ToString();
+        }
+    }
+
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+
+    private void ToggleUpdateForm(int id)
+    {
+        showUpdateForm = !showUpdateForm;
+        dataId = id;
+    }
+
+    private void CancelAddNewForm()
+    {
+        showAddNewForm = false;
+        errorMessage = null;
+    }
+    private void CancelUpdateForm()
+    {
+        showUpdateForm = !showUpdateForm;
+        errorMessage = null;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var response = await LocationService.CreateNewLocation(locationDto);
+            if(response.Item1 == true)
+            {
+                locationDto = new LocationDto();
+                showAddNewForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+
+    private async Task HandleValidUpdate()
+    {
+        try
+        {
+            locationModel.id = dataId ;
+            var response = await LocationService.UpdateLocation(locationModel);
+            if (response.Item1 == true)
+            {
+                locationModel = new Locations();
+                showUpdateForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+}

@@ -1,0 +1,286 @@
+﻿@page "/charts"
+@using Blazorise.Charts
+@using Blazorise
+@inject HttpClient Http
+<div style="display: flex; justify-content: center;">
+    <div style="width:500px; height:500px;">
+        <Chart @ref="pieChart" Type="ChartType.Pie" TItem="double" Clicked="@OnClicked" />
+    </div>
+    <div style="width:600px; height:600px; margin-top: 100px;margin-left: 50px;">
+        <Chart @ref="barCharMaintenance" Type="ChartType.Bar" TItem="double" Clicked="@OnClicked" />
+    </div>
+</div>
+<div style="width:1000px; height:700px; margin-top: 60px;margin-left: 70px;">
+    <Chart @ref="barChart" Type="ChartType.Bar" TItem="double" Clicked="@OnClicked" />
+</div>
+<div style="display: flex;justify-content: center;">
+    <div style="width:600px; height:600px;">
+        <Chart @ref="barCharEStatus" Type="ChartType.Bar" TItem="double" Clicked="@OnClicked" />
+    </div>
+</div>
+
+
+
+@code {
+    Chart<double> pieChart;
+    Chart<double> barChart;
+    Chart<double> barCharMaintenance;
+    Chart<double> barCharEStatus;
+    string[] labelsPieChart;
+    string[] labelsBarChart;
+    string[] labelsBarChartEStatus;
+    string[] labelsBarChartMaintenance = { "Đã sửa chữa", "Chưa sửa chữa" };
+    List<double> equipmentCounts;
+    List<double> usageCounts;
+    List<double> MaintenanceCounts;
+    List<double> EquipmentCounts;
+
+    List<string> backgroundColors = new List<string>
+    {
+        ChartColor.FromRgba(255, 99, 132, 0.2f),
+        ChartColor.FromRgba(54, 162, 235, 0.2f),
+        ChartColor.FromRgba(255, 206, 86, 0.2f),
+        ChartColor.FromRgba(75, 192, 192, 0.2f)
+
+    };
+    private List<string> borderColors = new List<string>
+    {
+        ChartColor.FromRgba(255, 99, 132, 1f),
+        ChartColor.FromRgba(54, 162, 235, 1f),
+        ChartColor.FromRgba(255, 206, 86, 1f),
+        ChartColor.FromRgba(75, 192, 192, 1f),
+
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await LoadDataPiechart();
+            await LoadDataBarchart();
+            await LoadDataMaintetance();
+            await LoadDataEquipmentCount();
+            await HandleRedraw();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during initialization: {ex.Message}");
+        }
+    }
+
+    private async Task LoadDataPiechart()
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7008/api/locations/equipment-count");
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadFromJsonAsync<List<DepartmentEquipmentCountDto>>();
+                if (data != null && data.Count > 0)
+                {
+                    labelsPieChart = data.Select(d => d.DepartmentName).ToArray();
+                    equipmentCounts = data.Select(d => (double)d.EquipmentCount).ToList();
+                }
+                else
+                {
+                    Console.WriteLine("Data is null or empty");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"API response not successful: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during API call: {ex.Message}");
+        }
+    }
+    private async Task LoadDataBarchart()
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7008/api/UsageHistories/equipment-usage-statistics");
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadFromJsonAsync<List<EquipmentUsageCountDto>>();
+                if (data != null && data.Count > 0)
+                {
+                    labelsBarChart = data.Select(d => (d.EquipmentId+"")).ToArray();
+                    usageCounts = data.Select(d => (double)d.UsageCount).ToList();
+                }
+                else
+                {
+                    Console.WriteLine("Data is null or empty");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"API response not successful: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during API call: {ex.Message}");
+        }
+    }
+
+    private async Task LoadDataMaintetance()
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7008/api/MaintenanceSchedules/summary");
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadFromJsonAsync<MaintenanceSummaryDto>();
+                if (data != null)
+                {
+                    MaintenanceCounts = new List<double> { (double)data.RepairedCount, (double)data.NotRepairedCount };
+                }
+                else
+                {
+                    Console.WriteLine("Data is null or empty");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"API response not successful: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during API call: {ex.Message}");
+        }
+    }
+
+    private async Task LoadDataEquipmentCount()
+    {
+        try
+        {
+            var response = await Http.GetAsync("https://localhost:7008/api/Equipments/equipmentCount");
+            if (response.IsSuccessStatusCode)
+            {
+                var data = await response.Content.ReadFromJsonAsync<List<EquipmentStatusDto>>();
+                if (data != null)
+                {
+                    labelsBarChartEStatus = data.Select(d => (@changeStatus(d.StatusId))).ToArray();
+                    EquipmentCounts = data.Select(d => (double)d.EquipmentCount).ToList();
+                }
+                else
+                {
+                    Console.WriteLine("Data is null or empty");
+                }
+            }
+            else
+            {
+                Console.WriteLine($"API response not successful: {response.StatusCode}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during API call: {ex.Message}");
+        }
+    }
+
+    private string changeStatus(int statusId)
+    {
+        if (statusId == 1) return "Sẵn sàng";
+        else if (statusId == 2) return "Đang sử dụng";
+        else if (statusId == 3) return "Đang bảo trì";
+        else if (statusId == 4) return "Hỏng";
+        else if (statusId == 5) return "Ngừng sử dụng";
+        else if (statusId == 6) return "Đang vận chuyển";
+        else return "Cần bảo trì";
+    }
+
+    private async Task HandleRedraw()
+    {
+        try
+        {
+            if (pieChart != null && labelsPieChart != null && equipmentCounts != null)
+            {
+                await pieChart.Clear();
+                await pieChart.AddLabelsDatasetsAndUpdate(labelsPieChart, GetPieChartDataset());
+            }
+
+            if (barChart != null && labelsBarChart != null && usageCounts != null)
+            {
+                await barChart.Clear();
+                await barChart.AddLabelsDatasetsAndUpdate(labelsBarChart, GetBarChartDataset());
+            }
+
+            if (barCharMaintenance != null && labelsBarChartMaintenance != null && MaintenanceCounts != null)
+            {
+                await barCharMaintenance.Clear();
+                await barCharMaintenance.AddLabelsDatasetsAndUpdate(labelsBarChartMaintenance, GetMaintenanceDataset());
+            }
+            if (barCharEStatus != null && labelsBarChartEStatus != null && EquipmentCounts != null)
+            {
+                await barCharEStatus.Clear();
+                await barCharEStatus.AddLabelsDatasetsAndUpdate(labelsBarChartEStatus, GetEquipmentCountDataset());
+            }
+
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error during chart redraw: {ex.Message}");
+        }
+    }
+
+    private PieChartDataset<double> GetPieChartDataset()
+    {
+        return new PieChartDataset<double>
+            {
+                Label = "Equipment Count",
+                Data = equipmentCounts,
+                BackgroundColor = backgroundColors,
+                BorderColor = borderColors,
+                BorderWidth = 1
+            };
+    }
+
+
+    private BarChartDataset<double> GetBarChartDataset()
+    {
+        return new BarChartDataset<double>
+            {
+                Label = "Statistics on equipment usage",
+                Data = usageCounts,
+                BackgroundColor = backgroundColors,
+                BorderColor = borderColors,
+                BorderWidth = 1
+            };
+    }
+
+    private BarChartDataset<double> GetMaintenanceDataset()
+    {
+        return new BarChartDataset<double>
+            {
+                Label = "Tình trạng bảo trì, sửa chữa",
+                Data = MaintenanceCounts,
+                BackgroundColor = backgroundColors,
+                BorderColor = borderColors,
+                BorderWidth = 1
+            };
+    }
+    
+    private BarChartDataset<double> GetEquipmentCountDataset()
+    {
+        return new BarChartDataset<double>
+            {
+                Label = "Tình trạng thiết bị",
+                Data = EquipmentCounts,
+                BackgroundColor = backgroundColors,
+                BorderColor = borderColors,
+                BorderWidth = 1
+            };
+    }
+
+    Task OnClicked(ChartMouseEventArgs e)
+    {
+        var model = e.Model as PieChartModel;
+        Console.WriteLine($"Handling event for {nameof(PieChartModel)}: x:{model.X} y:{model.Y}");
+        return Task.CompletedTask;
+    }
+}

@@ -1,0 +1,311 @@
+﻿@page "/user"
+
+@inject UserService UserService
+
+<h3>Users</h3>
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="id">Id</option>
+        <option value="username">User name</option>
+        <option value="email">Email</option>
+        <option value="jobposition">Job position</option>
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchUsers()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+    <RadzenButton Click="ToggleAddNewForm" Text="Add New" Icon="add_circle_outline" ButtonStyle="ButtonStyle.Primary" />
+    <br />
+    @if (showAddNewForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="userDto" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="name">Username</label>
+                    <InputText id="name" @bind-Value="userDto.Username" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="floor">Password</label>
+                    <InputText id="floor" @bind-Value="userDto.Password" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="room">Fullname</label>
+                    <InputText id="room" @bind-Value="userDto.FullName" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="room">Email</label>
+                    <InputText id="room" @bind-Value="userDto.Email" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="room">Job position</label>
+                    <InputText id="room" @bind-Value="userDto.JobPosition" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="room">Role</label>
+                    <InputText id="room" @bind-Value="userDto.Role" class="form-control" />
+                </div>
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+            </EditForm>
+        </div>
+    }
+</div>
+<br />
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+<RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                RowSelect="@((UserModel user) => ToggleUpdateForm(user))" Data="@usermodels" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedUserModels>
+    <Columns>
+        <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="50px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="userName" Title="Username" Frozen="true" Width="60px" />
+        <RadzenDataGridColumn Property="email" Title="Email" Frozen="true" Width="80px" />
+        <RadzenDataGridColumn Property="fullName" Title="FullName" Frozen="true" Width="80px" />
+        <RadzenDataGridColumn Property="jobPosition" Title="JobPosition" Frozen="true" Width="80px" />
+        <RadzenDataGridColumn Property="role" Title="Role" Frozen="true" Width="50px" />
+        <RadzenDataGridColumn Property="loginAttempts" Title="LoginAttempts" Frozen="true" Width="50px" />
+        <RadzenDataGridColumn Property="isLocked" Title="isLocked" Frozen="true" Width="50px" />
+        <RadzenDataGridColumn Property="createAt" Title="CreatedAt" Frozen="true" Width="80px" />
+        <RadzenDataGridColumn Width="100px" Title="">
+            <Template Context="data">
+                @if(data.isLocked)
+                {
+                    <RadzenButton Text="Unlock" Click=@(() => UnlockUser(data.id)) ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter" Icon="info" class="rz-py-0" />
+                }
+                </Template>
+        </RadzenDataGridColumn>
+
+    </Columns>
+</RadzenDataGrid>
+
+@if (showUpdateForm)
+{
+    <div class="add-new-form">
+        <EditForm Model="userDto" OnValidSubmit="HandleUpdateSubmit">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-group">
+                <label for="name">Username</label>
+                <InputText id="name" @bind-Value="userDto.Username" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="floor">Password</label>
+                <InputText id="floor" @bind-Value="userDto.Password" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="room">Fullname</label>
+                <InputText id="room" @bind-Value="userDto.FullName" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="room">Email</label>
+                <InputText id="room" @bind-Value="userDto.Email" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="room">Job position</label>
+                <InputText id="room" @bind-Value="userDto.JobPosition" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="room">Role</label>
+                <InputText id="room" @bind-Value="userDto.Role" class="form-control" />
+            </div>
+            <br />
+            <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelUpdateUserForm" />
+        </EditForm>
+    </div>
+}
+
+
+@code {
+    IEnumerable<UserModel> usermodels;
+    IList<UserModel> selectedUserModels;
+    private UserDto userDto = new UserDto();
+    private string errorMessage;
+    private string searchType = "name";
+    private string searchValue = string.Empty;
+    private bool showAddNewForm = false;
+    private bool showUpdateForm = false;
+    protected override async Task OnInitializedAsync()
+    {
+        var response = await UserService.GetAllUsers();
+        usermodels = response.Item1;
+        errorMessage = response.Item2;
+        if(usermodels != null)
+            selectedUserModels = new List<UserModel>() { usermodels.FirstOrDefault() };
+    }
+
+    private async Task SearchUsers()
+    {
+        try
+        {
+            var response = ("", "");
+            List<UserModel> userList = new List<UserModel>();
+            if (searchType == "jobposition")
+            {
+                response = await UserService.GetByFieldId(searchType, searchValue);
+                if (response.Item1 != null)
+                {
+                    userList = JsonSerializer.Deserialize<List<UserModel>>(response.Item1);
+                    errorMessage = null;
+                }
+                else
+                {
+                    errorMessage = response.Item2;
+                    return;
+                }
+            }
+            else
+            {
+                if (searchType == "id")
+                {
+                    if (int.TryParse(searchValue, out int id))
+                    {
+                        response = await UserService.GetById(id);
+                        if (response.Item1 != null)
+                        {
+                            var user = JsonSerializer.Deserialize<UserModel>(response.Item1);
+                            if (user != null)
+                            {
+                                userList.Add(user);
+                                errorMessage = null;
+                            }
+                        }
+                        else
+                        {
+                            errorMessage = response.Item2;
+                            return;
+                        }
+                    }
+                    else
+                    {
+                        errorMessage = "Dữ liệu nhập vào không hợp lệ";
+                        return;
+                    }
+                }
+                else
+                {
+                    response = await UserService.GetByFieldId(searchType, searchValue);
+                    if (response.Item1 != null)
+                    {
+                        var user = JsonSerializer.Deserialize<UserModel>(response.Item1);
+                        if (user != null)
+                        {
+                            userList.Add(user);
+                            errorMessage = null;
+                        }
+                    }
+                    else
+                    {
+                        errorMessage = response.Item2;
+                        return;
+                    }
+                }
+            }
+            usermodels = userList;
+            selectedUserModels = new List<UserModel>() { usermodels.FirstOrDefault() };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = ex.ToString();
+        }
+
+    }
+
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+    private void ToggleUpdateForm(UserModel selectedUser)
+    {
+        showUpdateForm = !showUpdateForm;
+    }
+    private void CancelAddNewForm()
+    {
+        showAddNewForm = false;
+        errorMessage = null;
+    }
+    private void CancelUpdateUserForm()
+    {
+        showUpdateForm = false;
+        errorMessage = null;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var response = await UserService.CreateNewUser(userDto);
+            if (response.Item1 == true)
+            {
+                userDto = new UserDto();
+                showAddNewForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+
+    private async Task HandleUpdateSubmit()
+    {
+        try
+        {
+            var response = await UserService.UpdateUser(userDto);
+            if (response.Item1 == true)
+            {
+                userDto = new UserDto();
+                showAddNewForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+
+    private async Task UnlockUser(int id)
+    {
+        try
+        {
+            var response = await UserService.UnlockUser(id);
+            if (response.Item1 == true)
+            {
+                showAddNewForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+}

@@ -1,0 +1,195 @@
+﻿@page "/model"
+
+@inject ModelService ModelService
+
+<PageTitle>Models</PageTitle>
+
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="id">Id</option>
+        <option value="name">Name</option>
+        
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchModels()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+    <RadzenButton Click="ToggleAddNewForm" Text="Add New" Icon="add_circle_outline" ButtonStyle="ButtonStyle.Primary" />
+    <br />
+    
+    @if (showAddNewForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="modelDto" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <InputText id="name" @bind-Value="modelDto.Name" class="form-control" />
+                </div>
+                
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+            </EditForm>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(errorMessage))
+    {
+        <div class="alert alert-danger">@errorMessage</div>
+    } 
+    <br/>
+</div>
+
+<RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="8" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                Data="@models" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedModels>
+    <Columns>
+        <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="80px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="name" Title="Name" Frozen="true" Width="160px" />
+        <RadzenDataGridColumn Width="100px" Title="">
+            <Template Context="data">
+                <RadzenButton Text="Cập nhật" Click=@(() => ToggleUpdateForm(data.id)) ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter" Icon="info" />
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+
+@if (showUpdateForm)
+{
+    <div class="add-new-form">
+        <EditForm Model="model" OnValidSubmit="HandleValidUpdate">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-group">
+                <label for="name">Name:</label>
+                <InputText id="name" @bind-Value="model.name" class="form-control" />
+            </div>
+
+            <br />
+            <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+        </EditForm>
+    </div>
+}
+
+@code {
+    IEnumerable<Models> models;
+    IList<Models> selectedModels;
+    private Models model = new Models();
+    private ModelDto modelDto = new ModelDto();
+    private string errorMessage;
+    private string searchType = "name";
+    private string searchValue = string.Empty;
+    private bool showAddNewForm = false;
+    private bool showUpdateForm = false;
+    private int dataId = 0;
+    protected override async Task OnInitializedAsync()
+    {
+        models = await ModelService.GetAllModels();
+        selectedModels = new List<Models>() { models.FirstOrDefault() };
+    }
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+    private void ToggleUpdateForm(int id)
+    {
+        showUpdateForm = !showUpdateForm;
+        dataId = id;
+    }
+    private void CancelAddNewForm()
+    {
+        showAddNewForm = false;
+        errorMessage = null;
+    }
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var response = await ModelService.CreateNewModel(modelDto);
+            if (response.Item1 == true)
+            {
+                modelDto = new ModelDto();
+                showAddNewForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+
+    private async Task HandleValidUpdate()
+    {
+        try
+        {
+            model.id = dataId;
+            var response = await ModelService.UpdateModel(model);
+            if (response.Item1 == true)
+            {
+                model = new Models();
+                showUpdateForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+
+    private async Task SearchModels()
+    {
+        try
+        {
+            var result = ("","");
+            if (searchType == "id")
+            {
+                if (int.TryParse(searchValue, out int id))
+                    result = await ModelService.GetById(id);
+                else
+                {
+                    errorMessage = "Nhập dữ liệu không hợp lệ";
+                    return;
+                } 
+            }
+            else
+            {
+                result = await ModelService.GetByFieldId(searchType, searchValue);
+            }
+            errorMessage = result.Item2;
+            List<Models> modelList = new List<Models>();
+            if(result.Item1 != null)
+            {
+                var model = JsonSerializer.Deserialize<Models>(result.Item1);
+                modelList.Add(model);
+                models = modelList;
+                selectedModels = new List<Models>() { models.FirstOrDefault() };
+            }
+
+
+        }
+        catch(Exception ex)
+        {
+            Console.WriteLine($"Error parsing JSON: {ex.Message}");
+        }
+    }
+
+    
+}

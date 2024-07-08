@@ -1,0 +1,211 @@
+﻿@page "/"
+@inject NavigationManager Navigation
+@inject EquipmentService EquipmentService
+@inject DialogService DialogService
+@inject ModelService ModelService
+@inject ManufacturerService ManufacturerService
+@inject StatusService StatusService
+@inject LocationService LocationService
+<PageTitle>Equipments</PageTitle>
+
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="model">Model</option>
+        <option value="seri">Seri</option>
+        <option value="name">Name</option>
+        <option value="locationname">Location name</option>
+        <!-- Thêm các loại tìm kiếm khác nếu cần -->
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchEquipments()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+    <RadzenButton Click="ToggleAddNewForm" Text="Add New" Icon="add_circle_outline" ButtonStyle="ButtonStyle.Primary" />
+    <br/>
+    @if (showAddNewForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="equipmentDto" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="name">Name</label>
+                    <InputText id="name" @bind-Value="equipmentDto.Name" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="mfg">Manufacture Date</label>
+                    <InputDate id="mfg" @bind-Value="equipmentDto.Mfg" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="model_Id">Model</label>
+                    @* <InputNumber id="model_Id" @bind-Value="equipmentDto.Model_Id" class="form-control" /> *@
+                    <RadzenDropDown @bind-Value="equipmentDto.Model_Id" Data="@models" TextProperty="name" ValueProperty=id Class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="manufacturer_Id">Manufacturer</label>
+                    <RadzenDropDown @bind-Value="equipmentDto.Manufacturer_Id" Data="@manufacturers" TextProperty="name" ValueProperty=id Class="form-control" />
+                    @* <InputNumber id="manufacturer_Id" @bind-Value="equipmentDto.Manufacturer_Id" class="form-control" /> *@
+                </div>
+                <div class="form-group">
+                    <label for="status_Id">Status</label>
+                    @* <InputNumber id="status_Id" @bind-Value="equipmentDto.Status_Id" class="form-control" /> *@
+                    <RadzenDropDown @bind-Value="equipmentDto.Status_Id" Data="@statusModels" TextProperty="Name" ValueProperty=Id Class="form-control" />
+
+                </div>
+                <div class="form-group">
+                    <label for="location_Id">Location</label>
+                    @* <InputNumber id="location_Id" @bind-Value="equipmentDto.Location_Id" class="form-control" /> *@
+                    <RadzenDropDown @bind-Value="equipmentDto.Location_Id" Data="@locations" TextProperty="DisplayName" ValueProperty=id Class="form-control" />
+                </div>
+                <br/>
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+            </EditForm>
+        </div>
+    }
+</div>
+
+<br/>
+
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+@if (equipments != null && equipments.Any())
+{
+    <RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                RowSelect="@((Equipment eq) => OnRowSelect(eq))" Data="@equipments" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedEquipments>
+        <Columns>
+            <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="35px" TextAlign="TextAlign.Center" />
+            <RadzenDataGridColumn Property="name" Title="Equipment name" Frozen="true" Width="220px" />
+            <RadzenDataGridColumn Property="seri" Title="Seri" Width="80px" />
+            
+            <RadzenDataGridColumn Property="status_Id" Title="Status" Width="70px" >
+                <Template Context="eq">
+                    @getStatusName(eq.status_Id)
+                </Template>
+            </RadzenDataGridColumn>
+            <RadzenDataGridColumn Property="location_Id" Title="Location" Width="160px">
+                <Template Context="eq">
+                    @getLocationName(eq.location_Id)
+                </Template>
+            </RadzenDataGridColumn>
+        </Columns>
+    </RadzenDataGrid>
+}
+
+@code {
+    IEnumerable<Equipment> equipments;
+    IList<Equipment> selectedEquipments;
+    IEnumerable<Models> models;
+    IEnumerable<Manufacturers> manufacturers;
+    IEnumerable<StatusModel> statusModels;
+    IEnumerable<Locations> locations;
+
+    private string searchType = "Model_Id";
+    private string searchValue = string.Empty;
+    private string errorMessage;
+    private bool showAddNewForm = false;
+    private EquipmentDto equipmentDto = new EquipmentDto();
+
+    protected override async Task OnInitializedAsync()
+    {
+
+        var result = await EquipmentService.GetAllEquipments();
+        equipments = result.Item1;
+        errorMessage = result.Item2;
+        selectedEquipments = new List<Equipment>() { equipments?.FirstOrDefault() };
+
+        models = await ModelService.GetAllModels();
+        manufacturers = await ManufacturerService.GetAllManufacturers();
+        statusModels = await StatusService.GetAllStatus();
+        locations = await LocationService.GetAllLocations();
+    }
+
+    private void OnRowSelect(Equipment equipment)
+    {
+        Navigation.NavigateTo($"/equipment-details/{equipment.id}");
+    }
+
+    private async Task SearchEquipments()
+    {
+        var result = await EquipmentService.GetByFieldId(searchType, searchValue);
+        errorMessage = result.Item2;
+        List<Equipment> equipmentList = new List<Equipment>();
+        if(result.Item1 != null)
+        {
+            try
+            {
+                if (searchType == "model" || searchType == "locationname")
+                {
+                    equipmentList = JsonSerializer.Deserialize<List<Equipment>>(result.Item1);
+                }
+                else if (searchType == "name" || searchType == "seri")
+                {
+                    var equipment = JsonSerializer.Deserialize<Equipment>(result.Item1);
+                    if (equipment != null)
+                    {
+                        equipmentList.Add(equipment);
+                    }
+                }
+
+                equipments = equipmentList;
+                selectedEquipments = new List<Equipment>() { equipments?.FirstOrDefault() };
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error parsing JSON: {ex.Message}");
+            }
+        }
+
+    }
+
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var response = await EquipmentService.CreateNewEquipment(equipmentDto);
+            if (response == "Thêm thiết bị mới thành công")
+            {
+                equipmentDto = new EquipmentDto(); // Reset the form
+                showAddNewForm = false; // Hide the form
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response;
+            }
+
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"An error occurred while adding the equipment: {ex.Message}");
+        }
+    }
+
+    private void CancelAddNewForm()
+    {
+        showAddNewForm = false;
+        errorMessage = null;
+    }
+
+    private string getStatusName (int statusId)
+    {
+        var status = statusModels.SingleOrDefault(s => s.Id == statusId);
+        return status != null ? status.Name : "Unknown";
+    }
+
+    private string getLocationName(int locationId)
+    {
+        var location = locations.SingleOrDefault(l => l.id == locationId);
+        return location != null ? location.DisplayName : "Unknown";
+    }
+}

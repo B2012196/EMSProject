@@ -1,0 +1,242 @@
+﻿@page "/manufacturer"
+
+@inject ManufacturerService ManufacturerService
+
+<PageTitle>Manufacturers</PageTitle>
+
+<div>
+    <label for="searchType">Search Type:</label>
+    <select id="searchType" @bind="searchType">
+        <option value="id">Id</option>
+        <option value="name">Name</option>
+        <option value="address">Address</option>
+        <option value="phone">Phone</option>
+    </select>
+
+    <label for="searchValue">Search Value:</label>
+    <input type="text" id="searchValue" @bind="searchValue" />
+    <RadzenButton Variant="Variant.Outlined" Click=@(args => SearchManufacturers()) Text="Search" ButtonStyle="ButtonStyle.Primary" />
+    <RadzenButton Click="ToggleAddNewForm" Text="Add New" Icon="add_circle_outline" ButtonStyle="ButtonStyle.Primary" />
+    <br />
+    @if (showAddNewForm)
+    {
+        <div class="add-new-form">
+            <EditForm Model="manufacturerDto" OnValidSubmit="HandleValidSubmit">
+                <DataAnnotationsValidator />
+                <ValidationSummary />
+
+                <div class="form-group">
+                    <label for="name">Name:</label>
+                    <InputText id="name" @bind-Value="manufacturerDto.Name" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="address">Address:</label>
+                    <InputText id="address" @bind-Value="manufacturerDto.Address" class="form-control" />
+                </div>
+                <div class="form-group">
+                    <label for="phone">Phone:</label>
+                    <InputText id="phone" @bind-Value="manufacturerDto.Phone" class="form-control" />
+                </div>
+
+                <br />
+                <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+                <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelAddNewForm" />
+            </EditForm>
+        </div>
+    }
+</div>
+<br />
+@if (!string.IsNullOrEmpty(errorMessage))
+{
+    <div class="alert alert-danger">@errorMessage</div>
+}
+
+<RadzenDataGrid AllowColumnResize="true" AllowAlternatingRows="false" FilterMode="FilterMode.Advanced" AllowSorting="true" PageSize="10" AllowPaging="true" PagerHorizontalAlign="HorizontalAlign.Left" ShowPagingSummary="true"
+                Data="@manufacturers" ColumnWidth="200px" LogicalFilterOperator="LogicalFilterOperator.Or" SelectionMode="DataGridSelectionMode.Single" @bind-Value=@selectedManufacturers>
+    <Columns>
+        <RadzenDataGridColumn Property="id" Filterable="false" Title="ID" Frozen="true" Width="80px" TextAlign="TextAlign.Center" />
+        <RadzenDataGridColumn Property="name" Title="Name" Frozen="true" Width="160px" />
+        <RadzenDataGridColumn Property="address" Title="Address" Frozen="true" Width="160px" />
+        <RadzenDataGridColumn Property="phone" Title="Phone" Frozen="true" Width="160px" />
+        <RadzenDataGridColumn Width="100px" Title="">
+            <Template Context="data">
+                <RadzenButton Text="Cập nhật" Click=@(() => ToggleUpdateForm(data.id)) ButtonStyle="ButtonStyle.Info" Variant="Variant.Flat" Shade="Shade.Lighter" Icon="info" class="rz-py-0" />
+            </Template>
+        </RadzenDataGridColumn>
+    </Columns>
+</RadzenDataGrid>
+@if (showUpdateForm)
+{
+    <div class="add-new-form">
+        <EditForm Model="manufacturerModel" OnValidSubmit="HandleValidUpdate">
+            <DataAnnotationsValidator />
+            <ValidationSummary />
+
+            <div class="form-group">
+                <label for="name">Tên:</label>
+                <InputText id="name" @bind-Value="manufacturerModel.name" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="address">Address:</label>
+                <InputText id="address" @bind-Value="manufacturerModel.address" class="form-control" />
+            </div>
+            <div class="form-group">
+                <label for="phone">Phone:</label>
+                <InputText id="phone" @bind-Value="manufacturerModel.phone" class="form-control" />
+            </div>
+
+            <br />
+            <RadzenButton Text="Save" ButtonType="ButtonType.Submit" ButtonStyle="ButtonStyle.Primary" />
+            <RadzenButton Text="Cancel" ButtonType="ButtonType.Button" ButtonStyle="ButtonStyle.Secondary" Click="CancelUpdateForm" />
+        </EditForm>
+    </div>
+}
+
+@code {
+    IEnumerable<Manufacturers> manufacturers;
+    IList<Manufacturers> selectedManufacturers;
+    private ManufacturerDto manufacturerDto = new ManufacturerDto();
+    private Manufacturers manufacturerModel = new Manufacturers();
+    private string errorMessage;
+    private string searchType = "name";
+    private string searchValue = string.Empty;
+    private bool showAddNewForm = false;
+    private bool showUpdateForm = false;
+    private int dataId = 0;
+    protected override async Task OnInitializedAsync()
+    {
+        manufacturers = await ManufacturerService.GetAllManufacturers();
+        selectedManufacturers = new List<Manufacturers>() { manufacturers.FirstOrDefault() };
+    }
+
+    private async Task SearchManufacturers()
+    {
+        try
+        {
+            var response = ("", "");
+            List<Manufacturers> manufacturerList = new List<Manufacturers>();
+            if (searchType == "id")
+            {
+                if (int.TryParse(searchValue, out int id))
+                {
+                    response = await ManufacturerService.GetById(id);
+                    if (response.Item1 != null)
+                    {
+                        var location = JsonSerializer.Deserialize<Manufacturers>(response.Item1);
+                        if (location != null)
+                            manufacturerList.Add(location);
+                    }
+                    else errorMessage = response.Item2;
+                }
+                else
+                {
+                    errorMessage = "Nhập dữ liệu không hợp lệ";
+                    return;
+                }
+            }
+            else if (searchType == "name" || searchType == "phone")
+            {
+                response = await ManufacturerService.GetByFieldValue(searchType, searchValue);
+                if (response.Item1 != null)
+                {
+                    var location = JsonSerializer.Deserialize<Manufacturers>(response.Item1);
+                    if (location != null)
+                        manufacturerList.Add(location);
+                }
+                else
+                {
+                    errorMessage = response.Item2;
+                    return;
+                }
+            }
+            else
+            {
+                response = await ManufacturerService.GetByFieldValue(searchType, searchValue);
+                if (response.Item1 != null)
+                {
+                    manufacturerList = JsonSerializer.Deserialize<List<Manufacturers>>(response.Item1);
+                }
+                else
+                {
+                    errorMessage = response.Item2;
+                    return;
+                }
+            }
+            manufacturers = manufacturerList;
+            selectedManufacturers = new List<Manufacturers>() { manufacturers.FirstOrDefault() };
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.ToString());
+            errorMessage = ex.ToString();
+        }
+    }
+
+    private void ToggleAddNewForm()
+    {
+        showAddNewForm = !showAddNewForm;
+    }
+    private void ToggleUpdateForm(int id)
+    {
+        showUpdateForm = !showUpdateForm;
+        dataId = id;
+    }
+    private void CancelAddNewForm()
+    {
+        showAddNewForm = false;
+        errorMessage = null;
+    }
+    private void CancelUpdateForm()
+    {
+        showUpdateForm = !showUpdateForm;
+        errorMessage = null;
+    }
+    private async Task HandleValidSubmit()
+    {
+        try
+        {
+            var response = await ManufacturerService.CreateNewManufacturer(manufacturerDto);
+            if(response.Item1 == true)
+            {
+                manufacturerDto = new ManufacturerDto();
+                showAddNewForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+
+    private async Task HandleValidUpdate()
+    {
+        try
+        {
+            manufacturerModel.id = dataId;
+            var response = await ManufacturerService.UpdateManufacturer(manufacturerModel);
+            if (response.Item1 == true)
+            {
+                manufacturerModel = new Manufacturers();
+                showUpdateForm = false;
+                errorMessage = null;
+                await OnInitializedAsync();
+            }
+            else
+            {
+                errorMessage = response.Item2;
+            }
+        }
+        catch (Exception ex)
+        {
+            errorMessage = ex.ToString();
+            Console.WriteLine(ex.ToString);
+        }
+    }
+}

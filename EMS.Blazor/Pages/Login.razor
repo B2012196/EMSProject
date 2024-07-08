@@ -1,0 +1,110 @@
+﻿@page "/login"
+@layout LoginLayout
+@inject HttpClient Http
+@inject NavigationManager Navigation
+@inject Blazored.LocalStorage.ILocalStorageService localStorage
+@using System.Text.Json
+<h3>Login</h3>
+<div Class="rz-p-0 rz-p-md-12">
+
+    <RadzenTemplateForm TItem="Model" Data=@model Submit=@OnSubmit InvalidSubmit=@OnInvalidSubmit>
+        <RadzenStack Gap="1rem" Class="rz-p-sm-12">
+            <RadzenFormField Text="Username" Variant="@variant">
+                <ChildContent>
+                    <RadzenTextBox Name="Username" @bind-Value=@model.Username />
+                </ChildContent>
+                @* <Helper>
+                    <RadzenRequiredValidator Component="Username" Text="Username is required." />
+                </Helper> *@
+            </RadzenFormField>
+            <RadzenFormField Text="Password" Variant="@variant">
+                <ChildContent>
+                    <RadzenTextBox Name="PasswordTextBox" @bind-Value="@model.Password" Visible="@(!password)" />
+                    <RadzenPassword Name="PasswordPasswordBox" @bind-Value="@model.Password" Visible="@password" />
+                </ChildContent>
+                <End>
+                    <RadzenButton Icon="@(password ? "visibility" : "visibility_off")" Click="TogglePassword" Variant="Variant.Text" Size="ButtonSize.Small" />
+                </End>
+                @* <Helper>
+                    <RadzenRequiredValidator Component="Password" Text="Password is required." />
+                </Helper> *@
+            </RadzenFormField>
+            <RadzenButton ButtonType="ButtonType.Submit" Text="Đăng nhập"></RadzenButton>
+            <RadzenButton Click="ExitPage" Variant="Variant.Flat" Shade="Shade.Lighter" Text="Thoát" ButtonStyle="ButtonStyle.Primary" />
+            @if (!string.IsNullOrEmpty(errorMessage))
+            {
+                <div class="alert alert-danger">@errorMessage</div>
+            }
+        </RadzenStack>
+    </RadzenTemplateForm>
+</div>
+
+@code {
+    string passwordValue = "";
+    bool password = true;
+    Variant variant = Variant.Outlined;
+    string errorMessage;
+    void TogglePassword()
+    {
+        password = !password;
+    }
+
+    class Model
+    {
+        public string Username { get; set; }
+        public string Password { get; set; }
+    }
+
+    Model model = new Model();
+    //EventConsole console;
+
+    async void OnSubmit(Model model)
+    {
+        var response = await Http.PostAsJsonAsync("https://localhost:7008/api/Users/Login", model);
+
+        if (response.IsSuccessStatusCode)
+        {
+            //Lay token
+
+            var loginResponse = await response.Content.ReadFromJsonAsync<LoginResponse>();
+
+            if (loginResponse != null && !string.IsNullOrEmpty(loginResponse.Token))
+            {
+                await localStorage.SetItemAsync("username", model.Username);
+                await localStorage.SetItemAsync(model.Username, loginResponse.Token);
+                // Navigate to home page on successful login
+                Navigation.NavigateTo("/");
+                StateHasChanged();
+            }
+
+            else
+            {
+                Console.WriteLine($"Login failed: {response}");
+            }
+        }
+        else
+        {
+            // Handle unsuccessful login
+            var errorResponse = await response.Content.ReadFromJsonAsync<LoginResponse>();
+            errorMessage = errorResponse.Message;
+            StateHasChanged();
+            Console.WriteLine($"Login failed: {errorResponse.Message}");
+        }
+    }
+
+    public class LoginResponse
+    {
+        public string Message { get; set; }
+        public string Token { get; set; }
+    }
+
+    void OnInvalidSubmit(FormInvalidSubmitEventArgs args)
+    {
+        Console.WriteLine($"Invalid submit: {JsonSerializer.Serialize(args, new JsonSerializerOptions() { WriteIndented = true })}");
+    }
+
+    private void ExitPage()
+    {
+        Navigation.NavigateTo("/");
+    }
+}
